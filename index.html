@@ -1,0 +1,1419 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>住宿明細確認</title>
+
+  <script>
+    /***********************
+     只需要修改下面這一區
+    ***********************/
+    const PAGE_CONFIG = {
+      storeName: "寵愛有家",
+      pageTitle: "住宿明細確認",
+      pageHintCreate: "【店家填寫模式】填完後按「產生確認連結」，複製連結給客人簽名回傳。",
+      pageHintConfirm: "【客人確認模式】請確認內容無誤後勾選、簽名並送出。",
+      pageHintDefault: "請用店家填寫模式開啟：在網址後加 ?mode=create。",
+      gasUrl: "你部署的GAS網址",
+      sharedSecret: "自訂密碼",
+      liffId: "填寫LIFF_ID",
+      confirmMailHint: "系統將寄送 PDF 至店家與飼主 Email 留存。"
+    };
+  </script>
+
+  <style>
+  :root{
+    --bg:#F6F1E9;
+    --card:#ffffff;
+    --line:#E3D8C8;
+    --title:#EDE6DA;
+    --text:#3C3A36;
+    --muted:#7B746B;
+    --btn:#2f2d2a;
+  }
+
+  html, body{
+    width:100%;
+    max-width:100%;
+    overflow-x:hidden;
+  }
+  *{ box-sizing:border-box; }
+  img, canvas{ max-width:100%; display:block; }
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    touch-action: pan-y;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap{
+    width:100%;
+    max-width:900px;
+    margin:0 auto;
+    padding:18px;
+    overflow-x:hidden;
+  }
+
+  .brand{ text-align:center; font-weight:800; letter-spacing:1px; margin:6px 0 10px; }
+  .barTitle{
+    background:var(--btn); color:#fff; text-align:center;
+    padding:12px 14px; border-radius:14px; font-weight:800; letter-spacing:3px;
+  }
+  .hint{color:var(--muted); font-size:13px; line-height:1.5; margin:10px 0 14px;}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:18px;
+    overflow:hidden;
+    margin:12px 0;
+  }
+  .cardTitle{background:var(--title); padding:12px 14px; font-weight:800;}
+  .cardBody{padding:14px; min-width:0;}
+    
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; min-width:0;}
+  .grid3{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; min-width:0;}
+  @media (max-width:920px){ .grid3{grid-template-columns:repeat(2, 1fr);} }
+  @media (max-width:520px){ .grid3{grid-template-columns:1fr;} }
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} }
+
+  label{display:block; font-size:13px; margin:2px 0 6px; color:var(--muted);}
+  input, textarea, select{
+    width:100%;
+    min-width:0;
+    padding:10px 10px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-size:16px;
+    color:var(--text);
+  }
+  textarea{min-height:86px; resize:vertical;}
+
+  .cellTitle{font-weight:800; margin-bottom:6px;}
+  .opts{display:flex; flex-wrap:wrap; gap:10px; align-items:center; min-width:0;}
+  .opt{display:flex; gap:6px; align-items:center; font-size:14px; min-width:0;}
+  .opt input{width:auto;}
+  .feeRow{display:grid; grid-template-columns:1fr 120px 120px 120px; gap:10px; margin-bottom:10px; min-width:0;}
+  @media (max-width:760px){ .feeRow{grid-template-columns:1fr 1fr; } }
+  .mono{font-variant-numeric: tabular-nums;}
+  .feeTotal{display:flex; justify-content:flex-end; gap:10px; align-items:center; margin-top:8px; font-weight:900;}
+  .feeTotal span{font-size:18px;}
+  .btns{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; min-width:0;}
+  button{
+    padding:11px 14px; border:0; border-radius:14px;
+    cursor:pointer; font-size:15px;
+    background:var(--btn); color:#fff;
+    white-space:nowrap;
+  }
+  .ghost{background:#fff; border:1px solid var(--line); color:var(--text);}
+  .small{font-size:12px; color:var(--muted); line-height:1.5;}
+
+  .linkBox{
+    margin-top:10px; padding:10px;
+    border:1px dashed #cdbfae; border-radius:12px;
+    background:#fff; word-break:break-all; font-size:13px;
+    overflow-wrap:anywhere;
+  }
+
+  .sigBox{background:#fff; border:1px dashed #cdbfae; border-radius:12px; padding:10px;}
+  canvas{width:100%; height:180px; border:1px solid var(--line); border-radius:12px; touch-action:none;}
+  .status{margin-top:10px; font-size:14px;}
+  .ok{color:#1b7f3a;}
+  .bad{color:#b00020;}
+
+  .modeTag{
+    display:inline-block; padding:6px 10px; border-radius:999px;
+    border:1px solid var(--line); background:#fff;
+    font-size:12px; color:var(--muted);
+    margin:10px 0 0;
+    min-height:14px;
+  }
+
+  .ro input[readonly], .ro textarea[readonly], .ro select:disabled{
+    background:#fbfaf7;
+  }
+
+  #cardActivity .recordTable{
+    width:100%;
+    max-width:100%;
+    table-layout:fixed;
+    border-collapse:collapse;
+    overflow:hidden;
+  }
+  #cardActivity .recordTable th,
+  #cardActivity .recordTable td{
+    vertical-align:top;
+    word-break:break-word;
+    overflow-wrap:anywhere;
+    padding:10px;
+    border-top:1px solid var(--line);
+    min-width:0;
+    overflow:hidden;
+  }
+
+  #cardActivity .recordTable th:nth-child(1),
+  #cardActivity .recordTable td:nth-child(1){ width:40%; }
+  #cardActivity .recordTable th:nth-child(2),
+  #cardActivity .recordTable td:nth-child(2){ width:60%; }
+
+  #cardActivity .leftStack{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-width:0;
+  }
+
+  #cardActivity input[id$="_date"]{
+    font-size:16px;
+    line-height:1.25;
+    padding:11px 10px;
+    font-variant-numeric: tabular-nums;
+    min-width:0;
+  }
+
+  #cardActivity .leftStack textarea{ min-height:110px; }
+
+  #cardActivity .dailyWrap{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-width:0;
+  }
+
+  #cardActivity .boxSec{
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:10px;
+    background:#fff;
+    min-width:0;
+  }
+  #cardActivity .boxSec .secHead{
+    font-weight:900;
+    margin-bottom:8px;
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  #cardActivity .boxSec .secHead::before{
+    content:"";
+    width:6px;
+    height:14px;
+    border-radius:999px;
+    background:var(--line);
+    display:inline-block;
+  }
+
+  #cardActivity .mealRow{
+    display:grid;
+    grid-template-columns: 44px 1fr;
+    gap:8px;
+    align-items:center;
+    min-width:0;
+  }
+
+  #cardActivity .boxSec .mealRow{
+    padding:4px 0;
+    margin-top:6px;
+  }
+  #cardActivity .boxSec .mealRow:first-of-type{
+    margin-top:0;
+  }
+  #cardActivity .boxSec .mealRow + .mealRow{
+    border-top:1px dashed #E3D8C8;
+  }
+
+  #cardActivity .mealTag{
+    font-weight:900;
+    color:var(--muted);
+    white-space:nowrap;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    background:#F3EEE6;
+    border-radius:8px;
+    padding:4px 0;
+  }
+  #cardActivity .mealOpts{
+    display:flex;
+    flex-wrap:wrap;
+    gap:2px 10px;
+    align-items:center;
+    min-width:0;
+  }
+  #cardActivity .mealOpts label{
+    white-space:nowrap;
+    display:inline-flex;
+    align-items:center;
+    margin:0;
+    padding:0;
+    line-height:1.2;
+  }
+  #cardActivity .mealOpts input[type="radio"]{
+    margin:0 6px 0 0;
+    width:auto;
+  }
+
+  #cardActivity .toiletNote{
+    margin-top:8px;
+    min-height:70px;
+  }
+
+  .actBar{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    flex-wrap:nowrap;
+    margin:0 0 10px;
+    min-width:0;
+  }
+  .actBar button{ white-space:nowrap; }
+
+  @media (max-width:520px){
+    .actBar{ gap:8px; }
+    .actBar button{
+      padding:9px 10px;
+      font-size:13px;
+      border-radius:12px;
+    }
+
+    #cardActivity .recordTable th,
+    #cardActivity .recordTable td{
+      padding:8px;
+      font-size:13px;
+    }
+    #cardActivity .leftStack textarea{ min-height:96px; }
+    #cardActivity .mealRow{ grid-template-columns: 40px 1fr; gap:6px; }
+    #cardActivity .mealOpts{ gap:2px 8px; }
+    #cardActivity .mealOpts label{ font-size:13px; }
+
+    #cardActivity .recordTable th:nth-child(1),
+    #cardActivity .recordTable td:nth-child(1){ width:44%; }
+    #cardActivity .recordTable th:nth-child(2),
+    #cardActivity .recordTable td:nth-child(2){ width:56%; }
+  }
+
+  #cardPersonality .opts{
+    display:flex !important;
+    flex-wrap:wrap !important;
+    gap:10px 18px !important;
+    align-content:flex-start !important;
+    height:auto !important;
+    min-height:0 !important;
+  }
+
+  #cardPersonality .opt{
+    margin:0 !important;
+    line-height:1.35 !important;
+  }
+
+  #cardPersonality .opt input[type="checkbox"]{
+    width:20px !important;
+    height:20px !important;
+    margin:0 !important;
+  }
+
+  #cardActivity .leftCol{
+    display:flex;
+    align-items:flex-start;
+  }
+  </style>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="brand" id="brandText">OO寵物</div>
+    <div class="barTitle" id="pageTitleText">— 住宿明細確認 —</div>
+    <div class="hint" id="hint"></div>
+    <div class="modeTag" id="modeTag">MODE: 讀取中…</div>
+
+    <div class="card" id="cardBase">
+      <div class="cardTitle">基本資訊</div>
+      <div class="cardBody">
+        <div class="grid">
+          <div>
+            <label>飼主姓名</label>
+            <input id="owner_name" placeholder="例：陳小美">
+          </div>
+          <div>
+            <label>寵物名字</label>
+            <input id="pet_name" placeholder="例：Lucky">
+          </div>
+          <div>
+            <label>住宿日期</label>
+            <input
+              id="stay_date"
+              inputmode="numeric"
+              pattern="\d*"
+              autocomplete="off"
+              placeholder="例：2026/03/18~2026/03/20"
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="cardActivity">
+      <div class="cardTitle">活動紀錄</div>
+      <div class="cardBody">
+        <div class="actBar">
+          <button type="button" class="ghost" id="actAddDay">＋新增一天</button>
+          <button type="button" class="ghost" id="actDelDay">－刪除最後一天</button>
+          <button type="button" class="ghost" id="actShowAll">顯示全部</button>
+        </div>
+
+        <table class="recordTable">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>日常紀錄</th>
+            </tr>
+          </thead>
+
+          <tbody id="activityBody">
+            <tr data-template="day">
+              <td>
+                <div class="leftStack">
+                  <div>
+                    <input id="d1_date" placeholder="YYYY/MM/DD" inputmode="numeric" pattern="\d*" autocomplete="off" maxlength="10">
+                  </div>
+                </div>
+              </td>
+
+              <td>
+                <div class="dailyWrap">
+                  <div class="boxSec">
+                    <div class="secHead">食慾</div>
+
+                    <div class="mealRow">
+                      <div class="mealTag">早</div>
+                      <div class="mealOpts">
+                        <label class="opt"><input type="radio" name="d1_am" value="良好">良好</label>
+                        <label class="opt"><input type="radio" name="d1_am" value="普通">普通</label>
+                        <label class="opt"><input type="radio" name="d1_am" value="不吃">不吃</label>
+                      </div>
+                    </div>
+
+                    <div class="mealRow">
+                      <div class="mealTag">中</div>
+                      <div class="mealOpts">
+                        <label class="opt"><input type="radio" name="d1_noon" value="良好">良好</label>
+                        <label class="opt"><input type="radio" name="d1_noon" value="普通">普通</label>
+                        <label class="opt"><input type="radio" name="d1_noon" value="不吃">不吃</label>
+                      </div>
+                    </div>
+
+                    <div class="mealRow">
+                      <div class="mealTag">晚</div>
+                      <div class="mealOpts">
+                        <label class="opt"><input type="radio" name="d1_pm" value="良好">良好</label>
+                        <label class="opt"><input type="radio" name="d1_pm" value="普通">普通</label>
+                        <label class="opt"><input type="radio" name="d1_pm" value="不吃">不吃</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="boxSec">
+                    <div class="secHead">排便 / 排尿次數</div>
+                    <div class="opts">
+                      <label class="opt"><input type="radio" name="d1_toilet" value="正常">正常</label>
+                      <label class="opt"><input type="radio" name="d1_toilet" value="異常">異常</label>
+                    </div>
+                    <textarea class="toiletNote" id="d1_toilet_note" placeholder="異常狀況說明"></textarea>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="cardCare">
+      <div class="cardTitle">照顧細節</div>
+      <div class="cardBody">
+        <label>生活習慣：</label>
+        <textarea id="lifestyle" placeholder="例：怕吵、喜歡被摸頭、午睡多..."></textarea>
+
+        <div style="height:16px"></div>
+
+        <label>餵食習慣（可多選）</label>
+
+        <div class="cellTitle">早</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="feed_am_kibble">飼料</label>
+          <label class="opt"><input type="checkbox" id="feed_am_can">罐頭</label>
+          <label class="opt"><input type="checkbox" id="feed_am_fresh">鮮食</label>
+          <label class="opt"><input type="checkbox" id="feed_am_freeze">凍乾</label>
+        </div>
+
+        <div class="cellTitle">中</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="feed_noon_kibble">飼料</label>
+          <label class="opt"><input type="checkbox" id="feed_noon_can">罐頭</label>
+          <label class="opt"><input type="checkbox" id="feed_noon_fresh">鮮食</label>
+          <label class="opt"><input type="checkbox" id="feed_noon_freeze">凍乾</label>
+        </div>
+
+        <div class="cellTitle">晚</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="feed_pm_kibble">飼料</label>
+          <label class="opt"><input type="checkbox" id="feed_pm_can">罐頭</label>
+          <label class="opt"><input type="checkbox" id="feed_pm_fresh">鮮食</label>
+          <label class="opt"><input type="checkbox" id="feed_pm_freeze">凍乾</label>
+        </div>
+
+        <div style="height:20px"></div>
+
+        <label>藥品 / 保健品</label>
+
+        <div class="cellTitle">早</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="med_am_before">飯前</label>
+          <label class="opt"><input type="checkbox" id="med_am_after">飯後</label>
+          <label class="opt"><input type="checkbox" id="med_am_with">隨餐</label>
+        </div>
+        <textarea id="med_am_note" placeholder="備註"></textarea>
+
+        <div class="cellTitle">中</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="med_noon_before">飯前</label>
+          <label class="opt"><input type="checkbox" id="med_noon_after">飯後</label>
+          <label class="opt"><input type="checkbox" id="med_noon_with">隨餐</label>
+        </div>
+        <textarea id="med_noon_note" placeholder="備註"></textarea>
+
+        <div class="cellTitle">晚</div>
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="med_pm_before">飯前</label>
+          <label class="opt"><input type="checkbox" id="med_pm_after">飯後</label>
+          <label class="opt"><input type="checkbox" id="med_pm_with">隨餐</label>
+        </div>
+        <textarea id="med_pm_note" placeholder="備註"></textarea>
+
+        <div style="height:16px"></div>
+
+        <label>照顧須知（選填）</label>
+        <textarea id="care_rules" placeholder="例：需要慢慢親近／怕生／不喜歡突然抱起..."></textarea>
+
+        <label>溫馨提醒（選填）</label>
+        <textarea id="warm_remind" placeholder="例：回家後先清淡飲食一天，若有軟便請觀察..."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cardTitle">住宿時期個性觀察（可多選）</div>
+      <div class="cardBody">
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="p_friendly_human">親人</label>
+          <label class="opt"><input type="checkbox" id="p_slow">不親人</label>
+          <label class="opt"><input type="checkbox" id="p_not_human">需慢慢靠近</label>
+        </div>
+
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="p_friendly_dog">親狗</label>
+          <label class="opt"><input type="checkbox" id="p_annoyed">不親狗</label>
+          <label class="opt"><input type="checkbox" id="p_not_dog">不喜狗過度打擾</label>
+        </div>
+
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="p_stable">穩定乖巧</label>
+          <label class="opt"><input type="checkbox" id="p_shy">熱情活潑</label>
+          <label class="opt"><input type="checkbox" id="p_nervous">緊張</label>
+        </div>
+
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="p_timidy">膽小</label>
+          <label class="opt"><input type="checkbox" id="p_anxious">焦慮</label>
+          <label class="opt"><input type="checkbox" id="p_hyper">熱情活潑</label>
+        </div>
+
+        <div class="opts">
+          <label class="opt"><input type="checkbox" id="p_play_high">玩樂需求高</label>
+          <label class="opt"><input type="checkbox" id="p_rest_high">休息需求高</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="cardFee">
+      <div class="cardTitle">費用明細</div>
+      <div class="cardBody">
+        <div id="feeRows"></div>
+
+        <div class="btns" id="feeBtns">
+          <button class="ghost" type="button" id="addFeeBtn">＋新增項目</button>
+          <button class="ghost" type="button" id="resetFeeBtn">重設常用項目</button>
+        </div>
+
+        <div class="feeTotal">
+          <div>總金額：</div>
+          <div class="mono">$ <span id="feeTotal">0</span></div>
+        </div>
+        <div class="small">小計＝單價×數量；總金額自動加總。</div>
+      </div>
+    </div>
+
+    <div class="card" id="cardCreateActions">
+      <div class="cardTitle">產生客人確認連結</div>
+      <div class="cardBody">
+        <div class="small">店家填完後按下方按鈕，系統會產生「帶資料的專屬連結」，傳給客人即可。</div>
+        <div class="btns">
+          <button type="button" id="genLinkBtn">產生確認連結</button>
+          <button type="button" class="ghost" id="copyLinkBtn" style="display:none;">複製連結</button>
+        </div>
+        <div class="linkBox" id="linkBox" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="card" id="cardConfirmActions" style="display:none;">
+      <div class="cardTitle">飼主確認與簽名</div>
+      <div class="cardBody">
+        <div style="margin-bottom:14px;">
+          <label>您的 Email（收取確認副本）*</label>
+          <input id="confirm_email" inputmode="email" placeholder="請輸入您的 Email">
+        </div>
+
+        <div class="opts" style="margin-bottom:10px;">
+          <label class="opt">
+            <input id="confirm_record" type="checkbox">
+            我已確認住宿期間紀錄內容無誤
+          </label>
+
+          <label class="opt">
+            <input id="confirm_fee" type="checkbox">
+            我已確認費用明細與總金額無誤
+          </label>
+        </div>
+
+        <div class="sigBox">
+          <div class="small">請在下方簽名</div>
+          <canvas id="sig"></canvas>
+          <div class="btns">
+            <button class="ghost" id="clearBtn" type="button">清除簽名</button>
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+        <div class="grid">
+          <div>
+            <label>簽名日期 *</label>
+            <input id="signed_date" />
+          </div>
+          <div>
+            <label>送出後 PDF 寄送</label>
+            <div class="small" id="confirmMailHintText">系統將寄送 PDF 至店家與飼主 Email 留存。</div>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button id="submitBtn" type="button">送出並寄送 PDF</button>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  let LIFF_PROFILE = {
+    userId: "",
+    displayName: "",
+    pictureUrl: "",
+    statusMessage: ""
+  };
+
+  async function initLiffProfile(){
+    try{
+      if(!PAGE_CONFIG.liffId || PAGE_CONFIG.liffId === "請填寫你的LIFF_ID"){
+        console.warn("尚未設定 LIFF ID");
+        return;
+      }
+
+      if(typeof liff === "undefined"){
+        console.warn("LIFF SDK 載入失敗");
+        return;
+      }
+
+      await liff.init({ liffId: PAGE_CONFIG.liffId });
+
+      if(!liff.isLoggedIn()){
+        liff.login({ redirectUri: location.href });
+        return;
+      }
+
+      const profile = await liff.getProfile();
+      LIFF_PROFILE = {
+        userId: profile.userId || "",
+        displayName: profile.displayName || "",
+        pictureUrl: profile.pictureUrl || "",
+        statusMessage: profile.statusMessage || ""
+      };
+    }catch(err){
+      console.error("LIFF 初始化失敗：", err);
+    }
+  }
+
+  document.title = `${PAGE_CONFIG.storeName}｜${PAGE_CONFIG.pageTitle}`;
+  document.getElementById("brandText").textContent = PAGE_CONFIG.storeName;
+  document.getElementById("pageTitleText").textContent = `— ${PAGE_CONFIG.pageTitle} —`;
+  document.getElementById("confirmMailHintText").textContent = PAGE_CONFIG.confirmMailHint;
+
+  const GAS_URL = PAGE_CONFIG.gasUrl;
+
+  const qs = new URLSearchParams(location.search);
+  let mode = qs.get("mode");
+  let dataParam = qs.get("data");
+  let idParam = qs.get("id");
+  const liffState = qs.get("liff.state");
+  if ((!mode && !dataParam && !idParam) && liffState) {
+    const decoded = decodeURIComponent(liffState);
+    const inner = decoded.startsWith("?") ? decoded.slice(1) : decoded;
+    const innerQs = new URLSearchParams(inner);
+    mode = innerQs.get("mode") || mode;
+    dataParam = innerQs.get("data") || dataParam;
+    idParam = innerQs.get("id") || idParam;
+  }
+
+  const isCreate = mode === "create" && !dataParam && !idParam;
+  const isConfirm = !!dataParam || !!idParam;
+
+  const pad = n => String(n).padStart(2,'0');
+  function setStatus(msg, ok=false){
+    const el = document.getElementById('status');
+    if(!el) return;
+    el.textContent = msg;
+    el.className = "status " + (ok ? "ok":"bad");
+  }
+
+  function escapeB64Json(obj){
+    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  }
+  function unescapeB64Json(b64){
+    return JSON.parse(decodeURIComponent(escape(atob(b64))));
+  }
+
+  function readRadio(name){
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    return el ? el.value : "";
+  }
+  function setRadio(name, value){
+    if(!value) return;
+    const el = document.querySelector(`input[name="${name}"][value="${CSS.escape(value)}"]`);
+    if(el) el.checked = true;
+  }
+
+  function setReadonlyAll(){
+    document.querySelectorAll('input, textarea').forEach(el=>{
+      const allow = ["confirm_email","signed_date"];
+      if(allow.includes(el.id)) return;
+      el.setAttribute('readonly','readonly');
+    });
+
+    document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(el=>{
+      const allow = ["confirm_record","confirm_fee"];
+      if(allow.includes(el.id)) return;
+      el.disabled = true;
+    });
+    document.querySelectorAll('select').forEach(el=> el.disabled = true);
+    document.body.classList.add("ro");
+  }
+
+  const feeRowsEl = document.getElementById("feeRows");
+  function feeRowTpl(item="", price="", qty="1"){
+    const row = document.createElement("div");
+    row.className = "feeRow";
+    row.innerHTML = `
+      <input class="fee_item" placeholder="項目" value="${String(item).replace(/"/g,'&quot;')}">
+      <input class="fee_price mono" placeholder="單價" inputmode="numeric" pattern="\\d*" value="${String(price)}">
+      <input class="fee_qty mono" placeholder="數量" inputmode="numeric" pattern="\\d*" value="${String(qty)}">
+      <input class="fee_sub mono" placeholder="小計" value="0" readonly>
+    `;
+    row.querySelector(".fee_price").addEventListener("input", calcFee);
+    row.querySelector(".fee_qty").addEventListener("input", calcFee);
+    return row;
+  }
+
+  function calcFee(){
+    let total = 0;
+    feeRowsEl.querySelectorAll(".feeRow").forEach(row=>{
+      const p = Number((row.querySelector(".fee_price").value || "").toString().replace(/,/g,'')) || 0;
+      const q = Number((row.querySelector(".fee_qty").value || "").toString().replace(/,/g,'')) || 0;
+      const sub = p * q;
+      row.querySelector(".fee_sub").value = String(sub);
+      total += sub;
+    });
+    document.getElementById("feeTotal").textContent = String(total);
+    return total;
+  }
+
+  function resetFeeCommon(){
+    feeRowsEl.innerHTML = "";
+    feeRowsEl.appendChild(feeRowTpl("住宿費", "", "1"));
+    feeRowsEl.appendChild(feeRowTpl("洗澡/美容", "", "1"));
+    feeRowsEl.appendChild(feeRowTpl("加購項目", "", "1"));
+    calcFee();
+  }
+
+  function addFeeRow(){
+    feeRowsEl.appendChild(feeRowTpl());
+    calcFee();
+  }
+
+  document.getElementById("addFeeBtn")?.addEventListener("click", addFeeRow);
+  document.getElementById("resetFeeBtn")?.addEventListener("click", resetFeeCommon);
+  resetFeeCommon();
+
+  const canvas = document.getElementById('sig');
+  const ctx = canvas ? canvas.getContext('2d') : null;
+
+  function resizeCanvas(){
+    if(!canvas || !ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = Math.floor(rect.width * ratio);
+    canvas.height = Math.floor(rect.height * ratio);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(ratio, ratio);
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#111';
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  let drawing = false;
+  let last = null;
+
+  function getPos(e){
+    if(!canvas) return { x:0, y:0 };
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : null;
+    const clientX = touch ? touch.clientX : e.clientX;
+    const clientY = touch ? touch.clientY : e.clientY;
+    return { x: clientX - rect.left, y: clientY - rect.top };
+  }
+
+  function start(e){
+    if(!canvas || !ctx) return;
+    e.preventDefault();
+    drawing = true;
+    last = getPos(e);
+  }
+  function move(e){
+    if(!canvas || !ctx) return;
+    if(!drawing) return;
+    e.preventDefault();
+    const p = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    last = p;
+  }
+  function end(e){
+    if(!canvas || !ctx) return;
+    if(!drawing) return;
+    e.preventDefault();
+    drawing = false;
+    last = null;
+  }
+
+  function clearSig(){
+    if(!canvas || !ctx) return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  function canvasIsBlank(){
+    if(!canvas || !ctx) return true;
+    const w = canvas.width, h = canvas.height;
+    const img = ctx.getImageData(0, 0, w, h).data;
+    for(let i = 3; i < img.length; i += 4){
+      if(img[i] !== 0) return false;
+    }
+    return true;
+  }
+
+  document.getElementById('clearBtn')?.addEventListener('click', clearSig);
+
+  if(canvas){
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start, {passive:false});
+    canvas.addEventListener('touchmove', move, {passive:false});
+    canvas.addEventListener('touchend', end, {passive:false});
+  }
+
+  function cb(id){ return !!document.getElementById(id)?.checked; }
+  function val(id){ return document.getElementById(id)?.value?.trim?.() || ""; }
+
+  function collectAllData(){
+    const feeItems = [];
+    feeRowsEl.querySelectorAll(".feeRow").forEach(row=>{
+      feeItems.push({
+        item: row.querySelector(".fee_item").value.trim(),
+        price: row.querySelector(".fee_price").value.trim(),
+        qty: row.querySelector(".fee_qty").value.trim(),
+        sub: row.querySelector(".fee_sub").value.trim()
+      });
+    });
+
+    function getDayIndices(){
+      const set = new Set();
+      document.querySelectorAll('input[id^="d"][id$="_date"]').forEach(el=>{
+        const m = el.id.match(/^d(\d+)_date$/);
+        if(m) set.add(parseInt(m[1],10));
+      });
+      return Array.from(set).sort((a,b)=>a-b);
+    }
+
+    const dayIdx = getDayIndices();
+    const days = dayIdx.map(i => ({
+      date: val(`d${i}_date`),
+      appetite_am: readRadio(`d${i}_am`),
+      appetite_noon: readRadio(`d${i}_noon`),
+      appetite_pm: readRadio(`d${i}_pm`),
+      toilet: readRadio(`d${i}_toilet`),
+      toilet_note: val(`d${i}_toilet_note`),
+      remind: val(`d${i}_remind`)
+    }));
+
+    return {
+      owner_name: val("owner_name"),
+      pet_name: val("pet_name"),
+      stay_date: val("stay_date"),
+
+      lifestyle: val("lifestyle"),
+
+      feed_am: { kibble: cb("feed_am_kibble"), can: cb("feed_am_can"), fresh: cb("feed_am_fresh"), freeze: cb("feed_am_freeze") },
+      feed_noon:{ kibble: cb("feed_noon_kibble"), can: cb("feed_noon_can"), fresh: cb("feed_noon_fresh"), freeze: cb("feed_noon_freeze") },
+      feed_pm: { kibble: cb("feed_pm_kibble"), can: cb("feed_pm_can"), fresh: cb("feed_pm_fresh"), freeze: cb("feed_pm_freeze") },
+
+      med_am: { before: cb("med_am_before"), after: cb("med_am_after"), with: cb("med_am_with"), note: val("med_am_note") },
+      med_noon:{ before: cb("med_noon_before"), after: cb("med_noon_after"), with: cb("med_noon_with"), note: val("med_noon_note") },
+      med_pm: { before: cb("med_pm_before"), after: cb("med_pm_after"), with: cb("med_pm_with"), note: val("med_pm_note") },
+
+      care_rules: val("care_rules"),
+      warm_remind: val("warm_remind"),
+
+      personality: {
+        friendly_human: cb("p_friendly_human"),
+        slow: cb("p_slow"),
+        not_human: cb("p_not_human"),
+        friendly_dog: cb("p_friendly_dog"),
+        annoyed: cb("p_annoyed"),
+        not_dog: cb("p_not_dog"),
+        stable: cb("p_stable"),
+        shy: cb("p_shy"),
+        nervous: cb("p_nervous"),
+        timidy: cb("p_timidy"),
+        anxious: cb("p_anxious"),
+        hyper: cb("p_hyper"),
+        play_high: cb("p_play_high"),
+        rest_high: cb("p_rest_high"),
+      },
+
+      days,
+      fee_items: feeItems,
+      fee_total: String(calcFee()),
+      created_at: new Date().toISOString()
+    };
+  }
+
+  function setCb(id, v){
+    const el = document.getElementById(id);
+    if(el) el.checked = !!v;
+  }
+  function setVal(id, v){
+    const el = document.getElementById(id);
+    if(el) el.value = v || "";
+  }
+
+  const stay = document.getElementById("stay_date");
+  const tbody = document.getElementById("activityBody");
+  const btnAdd = document.getElementById("actAddDay");
+  const btnDel = document.getElementById("actDelDay");
+  const btnShowAll = document.getElementById("actShowAll");
+
+  if (isConfirm) {
+    [btnAdd, btnDel, btnShowAll].forEach(b => {
+      if (!b) return;
+      b.disabled = true;
+      b.style.display = "none";
+    });
+  }
+
+  let showAll = false;
+
+  function getRows(){ return Array.from(tbody.querySelectorAll("tr")); }
+
+  function applyVisibility(){
+    const rows = getRows();
+    rows.forEach((tr, idx)=>{
+      tr.style.display = (showAll || idx===0) ? "" : "none";
+    });
+    if(btnShowAll){
+      btnShowAll.textContent = showAll ? "只顯示一天" : "顯示全部";
+    }
+  }
+
+  window.__setShowAllDays = function(on){
+    showAll = !!on;
+    applyVisibility();
+  };
+
+  function renameRow(tr, day){
+    tr.querySelectorAll("[id]").forEach(el=>{
+      el.id = el.id.replace(/^d\d+_/, `d${day}_`);
+    });
+    tr.querySelectorAll('input[type="radio"][name]').forEach(r=>{
+      r.name = r.name.replace(/^d\d+_/, `d${day}_`);
+    });
+  }
+
+  function clearRow(tr){
+    tr.querySelectorAll("input").forEach(inp=>{
+      if(inp.type === "radio" || inp.type === "checkbox") inp.checked = false;
+      else inp.value = "";
+    });
+    tr.querySelectorAll("textarea").forEach(t=> t.value = "");
+  }
+
+  function formatYMDInput(raw){
+    const s = String(raw || "").replace(/\D/g,"").slice(0,8);
+    const y = s.slice(0,4);
+    const m = s.slice(4,6);
+    const d = s.slice(6,8);
+    let out = y;
+    if(m) out += "/" + m;
+    if(d) out += "/" + d;
+    return out;
+  }
+
+  function patchDateInputs(){
+    tbody.querySelectorAll('input[id^="d"][id$="_date"]').forEach(el=>{
+      el.setAttribute("inputmode","numeric");
+      el.setAttribute("pattern","\\d*");
+      el.setAttribute("autocomplete","off");
+      el.setAttribute("maxlength","10");
+      if(!el.placeholder) el.placeholder = "YYYY/MM/DD";
+    });
+  }
+
+  function ensureDayCount(n){
+    n = Math.max(1, n);
+    const tpl = tbody.querySelector('tr[data-template="day"]') || tbody.querySelector("tr");
+    if(!tpl) return;
+
+    let rows = getRows();
+
+    while(rows.length > n){
+      tbody.removeChild(rows[rows.length-1]);
+      rows = getRows();
+    }
+
+    while(rows.length < n){
+      const tr = tpl.cloneNode(true);
+      tr.removeAttribute("data-template");
+      const day = rows.length + 1;
+      renameRow(tr, day);
+      clearRow(tr);
+      tbody.appendChild(tr);
+      rows = getRows();
+    }
+
+    patchDateInputs();
+  }
+
+  function formatYMD(digits){
+    const s = String(digits || "").replace(/\D/g, "").slice(0, 8);
+    const y = s.slice(0, 4);
+    const m = s.slice(4, 6);
+    const d = s.slice(6, 8);
+    let out = y;
+    if(m) out += "/" + m;
+    if(d) out += "/" + d;
+    return out;
+  }
+
+  function parseYMD(str){
+    const digits = String(str || "").replace(/\D/g,"").slice(0,8);
+    if(digits.length !== 8) return null;
+    const y = parseInt(digits.slice(0,4),10);
+    const m = parseInt(digits.slice(4,6),10);
+    const d = parseInt(digits.slice(6,8),10);
+    const dt = new Date(y, m-1, d);
+    if(dt.getFullYear()!==y || dt.getMonth()!==m-1 || dt.getDate()!==d) return null;
+    return dt;
+  }
+
+  function fmtDate(dt){
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth()+1).padStart(2,"0");
+    const d = String(dt.getDate()).padStart(2,"0");
+    return `${y}/${m}/${d}`;
+  }
+
+  function daysBetweenInclusive(a,b){
+    const ms = 24*60*60*1000;
+    const aa = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+    const bb = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+    if(bb < aa) return 0;
+    return Math.floor((bb-aa)/ms) + 1;
+  }
+
+  function fillDatesFromRange(startDt, endDt){
+    const n = daysBetweenInclusive(startDt, endDt);
+    ensureDayCount(n);
+    for(let i=0;i<n;i++){
+      const dt = new Date(startDt);
+      dt.setDate(startDt.getDate() + i);
+      const el = document.getElementById(`d${i+1}_date`);
+      if(el) el.value = fmtDate(dt);
+    }
+  }
+
+  function addDayManual(){
+    const rows = getRows();
+    ensureDayCount(rows.length + 1);
+    showAll = true;
+    applyVisibility();
+    const last = getRows()[getRows().length-1];
+    if(last){
+      last.scrollIntoView({behavior:"smooth", block:"start", inline:"nearest"});
+    }
+  }
+
+  function deleteLastDay(){
+    const rows = getRows();
+    if(rows.length <= 1){
+      alert("至少需要保留一天紀錄");
+      return;
+    }
+    tbody.removeChild(rows[rows.length - 1]);
+    const afterRows = getRows();
+    afterRows.forEach((row, idx)=> renameRow(row, idx + 1));
+    patchDateInputs();
+    applyVisibility();
+  }
+
+  btnAdd?.addEventListener("click", addDayManual);
+  btnDel?.addEventListener("click", deleteLastDay);
+  btnShowAll?.addEventListener("click", ()=>{
+    showAll = !showAll;
+    applyVisibility();
+  });
+
+  tbody.addEventListener("input", (e)=>{
+    const el = e.target;
+    if(!(el instanceof HTMLInputElement)) return;
+    if(!/^d\d+_date$/.test(el.id)) return;
+    const after = formatYMDInput(el.value);
+    if(el.value !== after) el.value = after;
+  });
+
+  stay?.addEventListener("input", (e)=>{
+    const inputType = e && e.inputType ? e.inputType : "";
+    const isDeleting = inputType.startsWith("delete");
+
+    let value = stay.value || "";
+    value = value.replace(/[～\-]/g, "~").replace(/\s+/g, "");
+
+    const parts = value.split("~");
+    const leftDigits  = (parts[0] || "").replace(/\D/g, "");
+    const rightDigits = (parts[1] || "").replace(/\D/g, "");
+
+    const leftFormatted  = formatYMD(leftDigits);
+    const rightFormatted = formatYMD(rightDigits);
+
+    const hasTilde = value.includes("~");
+
+    if(!hasTilde){
+      if(!isDeleting && leftDigits.length === 8){
+        stay.value = leftFormatted + "~";
+      }else{
+        stay.value = leftFormatted;
+      }
+    }else{
+      stay.value = leftFormatted + "~" + rightFormatted;
+    }
+
+    const s = parseYMD(leftFormatted);
+    const e2 = parseYMD(rightFormatted);
+    if(s && e2){
+      fillDatesFromRange(s, e2);
+      showAll = false;
+      applyVisibility();
+    }
+  });
+
+  patchDateInputs();
+  showAll = false;
+  applyVisibility();
+
+  function applyAllData(data){
+    setVal("owner_name", data.owner_name);
+    setVal("pet_name", data.pet_name);
+    setVal("stay_date", data.stay_date);
+
+    const list = data.days || [];
+    ensureDayCount(Math.max(1, list.length));
+
+    list.forEach((d, i)=>{
+      const idx = i + 1;
+      setVal(`d${idx}_date`, d.date);
+      setRadio(`d${idx}_am`, d.appetite_am || "");
+      setRadio(`d${idx}_noon`, d.appetite_noon || "");
+      setRadio(`d${idx}_pm`, d.appetite_pm || "");
+      setRadio(`d${idx}_toilet`, d.toilet || "");
+      setVal(`d${idx}_toilet_note`, d.toilet_note);
+      setVal(`d${idx}_remind`, d.remind);
+    });
+
+    setVal("lifestyle", data.lifestyle);
+
+    const fam = data.feed_am || {};
+    setCb("feed_am_kibble", fam.kibble);
+    setCb("feed_am_can", fam.can);
+    setCb("feed_am_fresh", fam.fresh);
+    setCb("feed_am_freeze", fam.freeze);
+
+    const fnoon = data.feed_noon || {};
+    setCb("feed_noon_kibble", fnoon.kibble);
+    setCb("feed_noon_can", fnoon.can);
+    setCb("feed_noon_fresh", fnoon.fresh);
+    setCb("feed_noon_freeze", fnoon.freeze);
+
+    const fpm = data.feed_pm || {};
+    setCb("feed_pm_kibble", fpm.kibble);
+    setCb("feed_pm_can", fpm.can);
+    setCb("feed_pm_fresh", fpm.fresh);
+    setCb("feed_pm_freeze", fpm.freeze);
+
+    const mam = data.med_am || {};
+    setCb("med_am_before", mam.before);
+    setCb("med_am_after", mam.after);
+    setCb("med_am_with", mam.with);
+    setVal("med_am_note", mam.note);
+
+    const mnoon = data.med_noon || {};
+    setCb("med_noon_before", mnoon.before);
+    setCb("med_noon_after", mnoon.after);
+    setCb("med_noon_with", mnoon.with);
+    setVal("med_noon_note", mnoon.note);
+
+    const mpm = data.med_pm || {};
+    setCb("med_pm_before", mpm.before);
+    setCb("med_pm_after", mpm.after);
+    setCb("med_pm_with", mpm.with);
+    setVal("med_pm_note", mpm.note);
+
+    setVal("care_rules", data.care_rules);
+    setVal("warm_remind", data.warm_remind);
+
+    const p = data.personality || {};
+    setCb("p_friendly_human", p.friendly_human);
+    setCb("p_slow", p.slow);
+    setCb("p_not_human", p.not_human);
+    setCb("p_friendly_dog", p.friendly_dog);
+    setCb("p_annoyed", p.annoyed);
+    setCb("p_not_dog", p.not_dog);
+    setCb("p_stable", p.stable);
+    setCb("p_shy", p.shy);
+    setCb("p_nervous", p.nervous);
+    setCb("p_timidy", p.timidy);
+    setCb("p_anxious", p.anxious);
+    setCb("p_hyper", p.hyper);
+    setCb("p_play_high", p.play_high);
+    setCb("p_rest_high", p.rest_high);
+
+
+    feeRowsEl.innerHTML = "";
+    (data.fee_items || []).forEach(x=>{
+      feeRowsEl.appendChild(feeRowTpl(x.item || "", x.price || "", x.qty || "1"));
+    });
+    if((data.fee_items || []).length === 0) resetFeeCommon();
+    calcFee();
+  }
+
+  const hintEl = document.getElementById("hint");
+  const modeTagEl = document.getElementById("modeTag");
+
+  (async function initMode(){
+    await initLiffProfile();
+
+    if (isCreate) {
+      hintEl.innerHTML = PAGE_CONFIG.pageHintCreate;
+      modeTagEl.textContent = "MODE: 店家填寫";
+      document.getElementById("cardConfirmActions").style.display = "none";
+      document.getElementById("cardCreateActions").style.display = "block";
+      return;
+    }
+
+    if (isConfirm) {
+      hintEl.innerHTML = PAGE_CONFIG.pageHintConfirm;
+      modeTagEl.textContent = "MODE: 客人確認";
+      document.getElementById("cardConfirmActions").style.display = "block";
+      document.getElementById("cardCreateActions").style.display = "none";
+
+      const now = new Date();
+      document.getElementById("signed_date").value =
+        `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      try {
+        if (idParam) {
+          const r = await fetch(GAS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "getCheckoutRecord",
+              secret: PAGE_CONFIG.sharedSecret,
+              id: idParam
+            })
+          });
+
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || "getCheckoutRecord failed");
+          applyAllData(j.data || {});
+        } else {
+          const decoded = unescapeB64Json(dataParam);
+          applyAllData(decoded);
+        }
+      } catch (e) {
+        setStatus("連結資料解析失敗，請向店家重新取得連結。");
+        return;
+      }
+
+      if (window.__setShowAllDays) window.__setShowAllDays(true);
+      resizeCanvas();
+      requestAnimationFrame(resizeCanvas);
+      setReadonlyAll();
+      return;
+    }
+
+    hintEl.innerHTML = PAGE_CONFIG.pageHintDefault;
+    modeTagEl.textContent = "MODE: 未指定";
+    document.getElementById("cardConfirmActions").style.display = "none";
+    document.getElementById("cardCreateActions").style.display = "none";
+  })();
+
+  const genBtn = document.getElementById("genLinkBtn");
+  const linkBox = document.getElementById("linkBox");
+  const copyBtn = document.getElementById("copyLinkBtn");
+
+  if (isCreate && genBtn){
+    genBtn.addEventListener("click", async ()=>{
+      try{
+        const data = collectAllData();
+        const r = await fetch(GAS_URL, {
+          method: "POST",
+          headers: {"Content-Type":"text/plain;charset=utf-8"},
+          body: JSON.stringify({
+            action: "createCheckoutRecord",
+            secret: PAGE_CONFIG.sharedSecret,
+            data
+          })
+        });
+
+        const j = await r.json();
+        if(!j.ok){
+          alert("產生連結失敗：" + (j.error || "未知錯誤"));
+          return;
+        }
+
+        const base = location.origin + location.pathname;
+        const url = `${base}?id=${encodeURIComponent(j.id)}&v=1`;
+
+        linkBox.style.display = "block";
+        linkBox.textContent = url;
+        copyBtn.style.display = "inline-block";
+      }catch(e){
+        alert("產生連結失敗：" + (e && e.message ? e.message : String(e)));
+      }
+    });
+
+    copyBtn.addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText(linkBox.textContent);
+        copyBtn.textContent = "已複製 ✓";
+        setTimeout(()=> copyBtn.textContent = "複製連結", 1200);
+      }catch(e){
+        alert("複製失敗，請長按選取連結複製。");
+      }
+    });
+  }
+
+  const submitBtn = document.getElementById("submitBtn");
+  if(submitBtn){
+    submitBtn.addEventListener("click", async ()=>{
+      try{
+        const confirmEmail = document.getElementById("confirm_email").value.trim();
+        if(!confirmEmail){ setStatus("請填寫您的 Email"); return; }
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(confirmEmail)){
+          setStatus("Email 格式不正確，請重新確認"); return;
+        }
+        if(!document.getElementById("confirm_record").checked){
+          setStatus("請勾選：我已確認住宿期間紀錄內容無誤"); return;
+        }
+        if(!document.getElementById("confirm_fee").checked){
+          setStatus("請勾選：我已確認費用明細與總金額無誤"); return;
+        }
+        if(canvasIsBlank()){
+          setStatus("請先簽名"); return;
+        }
+
+        setStatus("送出中…請稍候");
+
+        const data = collectAllData();
+        const payload = {
+          action: "submitHotelCheckoutConfirm",
+          secret: PAGE_CONFIG.sharedSecret,
+          data: {
+            ...data,
+            record_id: idParam || "",
+            customer_email: confirmEmail,
+            confirm_record: true,
+            confirm_fee: true,
+            signed_date: document.getElementById("signed_date").value.trim(),
+            signature_png: canvas.toDataURL("image/png"),
+            line_user_id: LIFF_PROFILE.userId || "",
+            line_display_name: LIFF_PROFILE.displayName || "",
+            line_picture_url: LIFF_PROFILE.pictureUrl || "",
+            line_status_message: LIFF_PROFILE.statusMessage || "",
+            ua: navigator.userAgent,
+            confirmed_at: new Date().toISOString()
+          }
+        };
+
+        const res = await fetch(GAS_URL, {
+          method: "POST",
+          headers: {"Content-Type":"text/plain;charset=utf-8"},
+          body: JSON.stringify(payload)
+        });
+
+        const json = await res.json();
+        if(!json.ok){
+          setStatus("送出失敗：" + (json.error || "未知錯誤"));
+          return;
+        }
+
+        setStatus("✅ 已送出！PDF 會寄送至店家與您的 Email", true);
+        submitBtn.disabled = true;
+      }catch(err){
+        setStatus("送出失敗：" + (err && err.message ? err.message : String(err)));
+      }
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
